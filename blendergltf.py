@@ -15,6 +15,7 @@ import zlib
 
 default_settings = {
     'gltf_output_dir': '',
+    'gltf_prune_unused': False,
     'buffers_embed_data': True,
     'buffers_combine_data': False,
     'nodes_export_hidden': False,
@@ -710,10 +711,9 @@ def export_meshes(settings, meshes, skinned_meshes):
 
     exported_meshes = {}
     for me in meshes:
-        if me.users != 0:
-            gltf_mesh = export_mesh(me)
-            if gltf_mesh != None:
-                exported_meshes.update({'mesh_' + me.name: gltf_mesh})
+        gltf_mesh = export_mesh(me)
+        if gltf_mesh != None:
+            exported_meshes.update({'mesh_' + me.name: gltf_mesh})
     return exported_meshes
 
 
@@ -1202,6 +1202,13 @@ def export_gltf(scene_delta, settings={}):
     # Clear globals
     g_buffers = []
     g_glExtensionsUsed = []
+
+    # Prune unused data
+    if settings['gltf_prune_unused']:
+        scene_delta = {
+            key: [data for data in value if data.users > 0]
+            for key, value in scene_delta.items()
+        }
 
     object_list = list(scene_delta.get('objects', []))
 
