@@ -122,9 +122,6 @@ else:
             # Set the output directory based on the supplied file path
             settings['gltf_output_dir'] = os.path.dirname(self.filepath)
 
-            # Always prune unused data
-            settings['gltf_prune_unused'] = True
-
             # Calculate a global transform matrix to apply to a root node
             settings['nodes_global_matrix'] = axis_conversion(
                 to_forward=self.axis_forward,

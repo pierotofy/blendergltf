@@ -15,7 +15,6 @@ import zlib
 
 default_settings = {
     'gltf_output_dir': '',
-    'gltf_prune_unused': False,
     'buffers_embed_data': True,
     'buffers_combine_data': False,
     'nodes_export_hidden': False,
@@ -820,13 +819,10 @@ def export_nodes(settings, scenes, objects, skinned_meshes, modded_meshes):
 
         return physics
 
-    is_visible  = lambda obj: True if settings['nodes_export_hidden'] else any(obj.is_visible(scene) for scene in scenes)
-    is_selected = lambda obj: selected_in_subtree(obj) if settings['nodes_selected_only'] else True
-
     def export_node(obj):
         ob = {
             'name': obj.name,
-            'children': ['node_' + child.name for child in obj.children if is_visible(child) and is_selected(child)],
+            'children': ['node_' + child.name for child in obj.children],
             'matrix': togl(obj.matrix_world),
         }
 
@@ -851,7 +847,7 @@ def export_nodes(settings, scenes, objects, skinned_meshes, modded_meshes):
 
         return ob
 
-    gltf_nodes = {'node_' + obj.name: export_node(obj) for obj in objects if is_visible(obj) and is_selected(obj)}
+    gltf_nodes = {'node_' + obj.name: export_node(obj) for obj in objects}
 
     def export_joint(arm_name, bone):
         gltf_joint = {
@@ -881,8 +877,6 @@ def export_nodes(settings, scenes, objects, skinned_meshes, modded_meshes):
 
 
 def export_scenes(settings, scenes):
-    is_selected = lambda obj: selected_in_subtree(obj) if settings['nodes_selected_only'] else True
-
     def export_scene(scene):
         result = {
             'extras': {
@@ -894,10 +888,10 @@ def export_scenes(settings, scenes):
         }
 
         if settings['nodes_export_hidden']:
-            result['nodes'] = ['node_' + ob.name for ob in scene.objects if ob.parent is None and is_selected(ob)]
-            result['extras']['hidden_nodes'] = [ob.name for ob in scene.objects if is_selected(ob) and not ob.is_visible(scene)]
+            result['nodes'] = ['node_' + ob.name for ob in scene.objects if ob.parent is None and ob.tag]
+            result['extras']['hidden_nodes'] = [ob.name for ob in scene.objects if ob.tag and not ob.is_visible(scene)]
         else:
-            result['nodes'] = ['node_' + ob.name for ob in scene.objects if ob.parent is None and is_selected(ob) and ob.is_visible(scene)]
+            result['nodes'] = ['node_' + ob.name for ob in scene.objects if ob.parent is None and ob.tag]
 
         return result
 
@@ -911,7 +905,7 @@ def export_buffers(settings):
         'accessors': {},
     }
 
-    if settings['buffers_combine_data']:
+    if settings['buffers_combine_data'] and len(g_buffers) > 0:
         buffers = [functools.reduce(lambda x, y: x+y, g_buffers)]
     else:
         buffers = g_buffers
@@ -1184,6 +1178,23 @@ def insert_root_nodes(gltf_data, root_matrix):
         scene['nodes'] = [node_name]
 
 
+def tag_references(objects):
+    for obj in objects:
+        obj.tag = True
+        obj.data.tag = True
+
+        for scene in obj.users_scene:
+            scene.tag = True
+
+        for material in [slot.material for slot in obj.material_slots]:
+            material.tag = True
+
+            for texture in [slot.texture for slot in material.texture_slots if slot]:
+                texture.tag = True
+                if texture.type == 'IMAGE':
+                    texture.image.tag = True
+
+
 def export_gltf(scene_delta, settings={}):
     global g_buffers
     global g_glExtensionsUsed
@@ -1203,14 +1214,38 @@ def export_gltf(scene_delta, settings={}):
     g_buffers = []
     g_glExtensionsUsed = []
 
-    # Prune unused data
-    if settings['gltf_prune_unused']:
-        scene_delta = {
-            key: [data for data in value if data.users > 0]
-            for key, value in scene_delta.items()
-        }
-
     object_list = list(scene_delta.get('objects', []))
+
+    action_list = scene_delta.get('actions', [])
+    if not settings['nodes_export_hidden'] or settings['nodes_selected_only']:
+        for id_list in scene_delta.values():
+            for bpy_id in id_list:
+                bpy_id.tag = False
+
+        if settings['nodes_selected_only']:
+            object_list = [obj for obj in object_list if selected_in_subtree(obj)]
+
+        if not settings['nodes_export_hidden']:
+            scenes = scene_delta.get('scenes', [])
+            object_list = [obj for obj in object_list if any([obj.is_visible(scene) for scene in scenes])]
+
+        print(object_list)
+
+        tag_references(object_list)
+
+        scene_delta = {
+            key: [data for data in value if data.tag] 
+                for key, value 
+                in scene_delta.items()
+        }
+    else:
+        scene_delta = {
+            key: [data for data in value if data.users > 0] 
+                for key, value 
+                in scene_delta.items()
+        }
+    scene_delta['actions'] = action_list
+
 
     # Apply modifiers
     if settings['meshes_apply_modifiers']:
