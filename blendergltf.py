@@ -1229,8 +1229,6 @@ def export_gltf(scene_delta, settings={}):
             scenes = scene_delta.get('scenes', [])
             object_list = [obj for obj in object_list if any([obj.is_visible(scene) for scene in scenes])]
 
-        print(object_list)
-
         tag_references(object_list)
 
         scene_delta = {
