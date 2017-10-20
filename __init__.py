@@ -22,7 +22,7 @@ from .blendergltf import export_gltf
 from .filters import visible_only, selected_only, used_only
 from . import extension_exporters
 from .pbr_utils import PbrExportPanel, PbrSettings
-
+from .cesium_lod_process import exportToGlTF
 
 bl_info = {
     "name": "glTF format",
@@ -45,6 +45,8 @@ if "bpy" in locals():
     importlib.reload(locals()['filters'])
     importlib.reload(locals()['extension_exporters'])
     importlib.reload(locals()['pbr_utils'])
+    importlib.reload(locals()['cesium_lod_process'])
+
 
 
 GLTFOrientationHelper = orientation_helper_factory(
